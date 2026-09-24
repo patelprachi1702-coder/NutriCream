@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    document.documentElement.style.visibility = 'hidden';
+    fetch('../../server/auth/auth_status.php', { credentials: 'same-origin' })
+      .then(response => response.json())
+      .then(account => {
+        if (!account.authenticated) {
+          const returnUrl = window.location.pathname.split('/').pop() + window.location.search;
+          window.location.replace('../../server/auth/auth.php?redirect=' + encodeURIComponent('../../public/' + returnUrl));
+          return;
+        }
+        document.documentElement.style.visibility = 'visible';
+      })
+      .catch(() => window.location.replace('auth.php'));
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creamy Dreams - Ice Cream Shop</title>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container">
+      <div class="logo">🍦 Coolest Dreams</div>
+      <ul class="nav-links">
+        <li><a href="#home">Home</a></li>
+        <li><a href="#menu">Menu</a></li>
+        <li><a href="#cart">Cart (<span id="cart-count">0</span>)</a></li>
+        <li><a href="#track-order">Track Order</a></li>
+        <li><a href="../../server/auth/auth.php">Login / Register</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <a href="#order-form" class="online-order-btn">
+    🛒 Online Order
+  </a>
+
+  <!-- Hero Section -->
+  <section id="home" class="hero">
+    <div class="hero-content">
+      <h1>Welcome to Creamy Dreams</h1>
+      <p>The Best Ice Cream in Town!</p>
+      <button class="btn btn-primary" onclick="document.getElementById('menu').scrollIntoView({behavior: 'smooth'})">
+        Explore Menu
+      </button>
+    </div>
+  </section>
+  <div class="offer-container">
+    <div class="offer-card">
+      <div class="offer-badge">🔥 LIMITED OFFER</div>
+      <h2>🍦 Buy 2 Get 1 FREE</h2>
+      <p>🎉Buy 2 Get 1 Free Every Sunday🎉</p>
+      <button class="offer-btn">Claim Offer</button>
+    </div>
+  </div>
+
+  <!-- Menu Section -->
+  <section id="menu" class="menu">
+    <div class="container">
+      <h2>Our Delicious Menu</h2>
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="vanilla">Vanilla</button>
+        <button class="filter-btn" data-filter="chocolate">Chocolate</button>
+        <button class="filter-btn" data-filter="fruity">Fruity</button>
+        <button class="filter-btn" data-filter="sugarfree">Sugar Free</button>
+        <button class="filter-btn" data-filter="customize">Customize Ice Cream</button>
+      </div>
+      <div class="menu-grid" id="menu-grid">
+        <!-- Ice cream cards will be generated here -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Shopping Cart -->
+  <section id="cart" class="cart-section">
+    <div class="container">
+      <h2>Shopping Cart</h2>
+      <div class="cart-content">
+        <div class="cart-items" id="cart-items">
+          <p class="empty-cart">Your cart is empty</p>
+        </div>
+        <div class="cart-summary">
+          <h3>Order Summary</h3>
+          <div class="summary-item">
+            <span>Subtotal:</span>
+            <span id="subtotal">₹0.00</span>
+          </div>
+          <div class="summary-item">
+            <span>Tax (10%):</span>
+            <span id="tax">₹0.00</span>
+          </div>
+          <div class="summary-item nutrition-total">
+            <span>Total Calories:</span>
+            <span id="total-calories">0 kcal</span>
+          </div>
+          <div class="summary-item nutrition-total">
+            <span>Total Sugar:</span>
+            <span id="total-sugar">0 g</span>
+          </div>
+          <div class="summary-item total">
+            <span>Total:</span>
+            <span id="total">₹0.00</span>
+          </div>
+          <button class="btn btn-primary btn-checkout" id="checkout-btn" disabled>
+            Checkout
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="order-section" id="order-form">
+    <div class="container">
+        <div id="table-order-notice" class="table-order-notice" hidden></div>
+        <h2>Order Online</h2>
+
+        <form id="order-details-form" class="order-form" action="../../server/core/save_order.php" method="post">
+            <input type="text" name="customer_name" placeholder="Customer Name" required>
+            <br>
+            <input type="tel" name="phone" placeholder="Mobile Number" required><br>
+            <input type="hidden" name="table_number" id="table-number-input">
+          <label for="delivery-address" id="address-label">Delivery Address <span aria-hidden="true">*</span></label>
+          <textarea id="delivery-address" name="address" placeholder="Enter your complete delivery address" maxlength="100" required></textarea><br>
+          <br>
+
+            <select name="delivery_partner" id="delivery-partner" required>
+                <option value="" disabled selected hidden>Select Delivery Partner</option>
+                <option value="Blinkit">Blinkit</option>
+                <option value="Zepto">Zepto</option>
+                <option value="Swiggy Instamart">Swiggy Instamart</option>
+            </select>
+
+            <input type="hidden" name="total" id="total-input" value="500">
+            <input type="hidden" name="items" id="cart-items-input" value="[]">
+
+            <button type="submit" class="btn btn-primary">
+                Place Order
+            </button>
+            <a href="https://wa.me/8160412225"
+               class="whatsapp-btn"
+               target="_blank"
+               rel="noopener noreferrer">
+               📱 Order on WhatsApp
+            </a>
+        </form>
+    </div>
+</section>
+
+  <section class="tracking-section" id="track-order">
+    <div class="container">
+      <h2>Track Your Online Order</h2>
+      <form id="tracking-form" class="tracking-form">
+        <label for="tracking-order-id">Order ID</label>
+        <input type="number" id="tracking-order-id" min="1" placeholder="Enter your order ID" required>
+        <button type="submit" class="btn btn-primary">Track Order</button>
+      </form>
+      <div id="tracking-result" class="tracking-result" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="delivery-partners">
+    <h2>Available On</h2>
+
+    <div class="partners">
+      <div class="partner-card">⚡ Blinkit</div>
+      <div class="partner-card">🚀 Zepto</div>
+      <div class="partner-card">🛵 Swiggy Instamart</div>
+    </div>
+  </section>
+
+  <section class="reviews">
+    <div class="container">
+      <h2>⭐ Customer Reviews</h2>
+
+      <div class="review-stats">
+        <h3>⭐⭐⭐⭐⭐ 4.9/5 Rating</h3>
+        <p>Based on 1,250+ Customer Reviews</p>
+      </div>
+
+      <div class="reviews-grid">
+        <div id="user-reviews"></div>
+
+        <div class="review-card">
+          <img src="../assets/images/products/ice1.avif" alt="Customer">
+          <h3>Rahul Patel</h3>
+          <div class="stars">⭐⭐⭐⭐⭐</div>
+          <p>"Best ice cream in Rajkot! Loved the Chocolate Bliss."</p>
+        </div>
+
+        <div class="review-card">
+          <img src="../assets/images/products/ice3.avif" alt="Customer">
+          <h3>Priya Shah</h3>
+          <div class="stars">⭐⭐⭐⭐⭐</div>
+          <p>"Amazing sugar-free options and fast delivery."</p>
+        </div>
+
+        <div class="review-card">
+          <img src="../assets/images/products/Mango.avif" alt="Customer">
+          <h3>Amit Joshi</h3>
+          <div class="stars">⭐⭐⭐⭐</div>
+          <p>"Fresh flavors and great nutrition information."</p>
+        </div>
+
+      </div>
+
+      <div class="review-form">
+        <h3>Leave a Review</h3>
+
+        <input type="text" id="review-name" placeholder="Your Name">
+
+        <textarea id="review-text"
+            placeholder="Write your review"></textarea>
+
+        <label for="review-photo" class="photo-label">Add a photo (optional)</label>
+        <input type="file" id="review-photo" accept="image/png,image/jpeg,image/webp,image/gif">
+        <img id="review-photo-preview" class="review-photo-preview" alt="Selected review photo preview" hidden>
+
+        <button type="button" onclick="submitReview()">
+            Submit Review
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section id="location" class="location-section">
+    <div class="container">
+      <h2>📍 Our Location</h2>
+
+      <p>Near JK Hotel, Morbi Road, Rajkot</p>
+      
+      <a id="shop-google-map-link" href="https://maps.google.com/?q=Near+JK+Hotel+Morbi+Road+Rajkot"
+
+        rel="noopener noreferrer"
+        class="map-btn">
+        📍 Open in Google Maps
+      </a>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section id="contact" class="contact">
+    <div class="container">
+      <h2>Get in Touch</h2>
+      <div class="contact-info">
+        <div class="info-item">
+          <h3>📍 Location</h3>
+          <p>Near JK Hotel, Morbi Road, Rajkot</p>
+        </div>
+        <div class="info-item">
+          <h3>📞 Phone</h3>
+          <p>+91 6325545455</p>
+          
+        </div>
+        <div class="info-item">
+          <h3>⏰ Hours</h3>
+          <p>Mon - Sun: 10 AM - 10 PM</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p> <center>&copy; 2024 Creamy Dreams. All rights reserved. 🍨</center></p>
+  </footer>
+
+  <script src="../../script.js"></script>
+</body>
+</html>
