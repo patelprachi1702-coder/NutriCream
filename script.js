@@ -293,9 +293,15 @@ function setupOrderTracking() {
             trackUrl.searchParams.set('id', orderId);
             const response = await fetch(trackUrl);
             const order = await response.json();
-            if (!response.ok) throw new Error(order.error || 'Order not found.');
+            if (!response.ok) throw new Error(order?.error || 'Order not found.');
+            if (!order || typeof order !== 'object' || Number(order.id) !== Number(orderId)) {
+                throw new Error('The order tracking response was invalid.');
+            }
 
             if (orderId !== trackedOrderId) {
+                if (trackingMap) {
+                    trackingMap.remove();
+                }
                 trackedOrderId = orderId;
                 trackingMap = undefined;
                 trackingMarkers = {};
@@ -336,8 +342,9 @@ function setupOrderTracking() {
                     label: 'Live delivery location'
                 }
             ].filter(location => location.available);
-            if (mapLocations.length && window.L) {
+            if (mapLocations.length) {
                 const googleMapLink = document.getElementById('order-google-map-link');
+                const mapElement = document.getElementById('order-map');
                 const primaryLocation = mapLocations.find(location => location.key === 'delivery')
                     || mapLocations.find(location => location.key === 'customer')
                     || mapLocations[0];
@@ -345,49 +352,69 @@ function setupOrderTracking() {
                     googleMapLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(primaryLocation.point.join(','))}`;
                     googleMapLink.hidden = false;
                 }
-                if (!trackingMap) {
-                    trackingMap = L.map('order-map');
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '&copy; OpenStreetMap contributors'
-                    }).addTo(trackingMap);
-                }
-                mapLocations.forEach(location => {
-                    if (!trackingMarkers[location.key]) {
-                        trackingMarkers[location.key] = L.marker(location.point)
-                            .addTo(trackingMap)
-                            .bindPopup(location.label);
+                if (window.L) {
+                    if (!trackingMap) {
+                        trackingMap = L.map('order-map');
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '&copy; OpenStreetMap contributors'
+                        }).addTo(trackingMap);
+                    }
+                    mapLocations.forEach(location => {
+                        if (!trackingMarkers[location.key]) {
+                            trackingMarkers[location.key] = L.marker(location.point)
+                                .addTo(trackingMap)
+                                .bindPopup(location.label);
+                        } else {
+                            trackingMarkers[location.key].setLatLng(location.point);
+                        }
+                    });
+                    Object.keys(trackingMarkers).forEach(key => {
+                        if (!mapLocations.some(location => location.key === key)) {
+                            trackingMap.removeLayer(trackingMarkers[key]);
+                            delete trackingMarkers[key];
+                        }
+                    });
+                    const points = mapLocations.map(location => location.point);
+                    if (points.length > 1) {
+                        trackingMap.fitBounds(L.latLngBounds(points), { padding: [24, 24], maxZoom: 16 });
                     } else {
-                        trackingMarkers[location.key].setLatLng(location.point);
+                        trackingMap.setView(points[0], 16);
                     }
-                });
-                Object.keys(trackingMarkers).forEach(key => {
-                    if (!mapLocations.some(location => location.key === key)) {
-                        trackingMap.removeLayer(trackingMarkers[key]);
-                        delete trackingMarkers[key];
+                    const deliveryLocation = mapLocations.find(location => location.key === 'delivery');
+                    if (deliveryLocation) trackingMap.panTo(deliveryLocation.point);
+                    requestAnimationFrame(() => trackingMap.invalidateSize());
+                    const messages = [];
+                    if (order.customer_location_available) messages.push('Your order location');
+                    if (order.shop_location_available) messages.push('shop location');
+                    if (order.location_available) {
+                        messages.push(order.location_updated_at
+                            ? `live delivery location updated ${order.location_updated_at}`
+                            : 'live delivery location');
+                    } else {
+                        messages.push('live delivery location will appear when staff starts sharing it');
                     }
-                });
-                const points = mapLocations.map(location => location.point);
-                if (points.length > 1) {
-                    trackingMap.fitBounds(L.latLngBounds(points), { padding: [24, 24], maxZoom: 16 });
+                    locationMessage.textContent = `${messages.join(' · ')}.`;
                 } else {
-                    trackingMap.setView(points[0], 16);
+                    let mapFrame = mapElement.querySelector('iframe');
+                    if (!mapFrame) {
+                        mapFrame = document.createElement('iframe');
+                        mapFrame.title = 'Live order location map';
+                        mapFrame.loading = 'lazy';
+                        mapFrame.referrerPolicy = 'no-referrer-when-downgrade';
+                        mapElement.replaceChildren(mapFrame);
+                    }
+                    const [latitude, longitude] = primaryLocation.point;
+                    mapFrame.src = `https://maps.google.com/maps?q=${encodeURIComponent(`${latitude},${longitude}`)}&z=15&output=embed`;
+                    locationMessage.textContent = order.location_available
+                        ? `Live delivery location updated ${order.location_updated_at || 'now'}.`
+                        : 'Showing the shop location. The map will update when the delivery location is shared.';
                 }
-                const messages = [];
-                if (order.customer_location_available) messages.push('Your order location');
-                if (order.shop_location_available) messages.push('shop location');
-                if (order.location_available) {
-                    messages.push(order.location_updated_at
-                        ? `live delivery location updated ${order.location_updated_at}`
-                        : 'live delivery location');
-                } else {
-                    messages.push('live delivery location will appear when staff starts sharing it');
-                }
-                locationMessage.textContent = `${messages.join(' · ')}.`;
             } else {
                 const googleMapLink = document.getElementById('order-google-map-link');
                 if (googleMapLink) googleMapLink.hidden = true;
-                locationMessage.textContent = 'Location map is not available right now.';
+                locationMessage.textContent = 'No location coordinates are available for this order yet.';
             }
+            result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             clearInterval(refreshTimer);
             refreshTimer = setInterval(() => loadOrder(orderId, true), 5000);
         } catch (error) {

@@ -68,4 +68,3 @@ if (mysqli_stmt_execute($statement)) {
 } else {
     echo 'Error saving order: ' . htmlspecialchars(mysqli_stmt_error($statement));
 }
-?>
