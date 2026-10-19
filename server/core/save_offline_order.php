@@ -6,33 +6,38 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$name = trim($_POST['customer_name'] ?? '');
-$phone = trim($_POST['phone'] ?? '');
+$name = '';
+$phone = '';
+$tableNumber = trim($_POST['table_number'] ?? '');
+$orderSource = $_POST['order_source'] ?? '';
 $items = json_decode($_POST['items'] ?? '[]', true);
 $total = (float) ($_POST['total'] ?? 0);
 
-if ($name === '' || $phone === '' || !is_array($items) || count($items) === 0 || $total <= 0) {
-    exit('Please enter customer details and add at least one item.');
+if ($tableNumber !== '' && !preg_match('/^[A-Za-z0-9-]{1,20}$/', $tableNumber)) {
+    http_response_code(400);
+    exit('Please enter a valid table number.');
+}
+
+if ($orderSource === 'table_qr' && $tableNumber === '') {
+    http_response_code(400);
+    exit('Please enter your table number before placing a table order.');
+}
+
+if (!is_array($items) || count($items) === 0 || $total <= 0) {
+    exit('Please add at least one item before placing your order.');
 }
 
 $itemsJson = json_encode($items);
-mysqli_query($conn, "CREATE TABLE IF NOT EXISTS offline_orders (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    customer_name VARCHAR(100) NOT NULL,
-    phone VARCHAR(30) NOT NULL,
-    items TEXT NOT NULL,
-    total DECIMAL(10,2) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)");
-if (mysqli_num_rows(mysqli_query($conn, "SHOW COLUMNS FROM offline_orders LIKE 'items'")) === 0) {
-    mysqli_query($conn, "ALTER TABLE offline_orders ADD items TEXT NOT NULL AFTER phone");
-}
 
-$statement = mysqli_prepare($conn, 'INSERT INTO offline_orders (customer_name, phone, items, total) VALUES (?, ?, ?, ?)');
-mysqli_stmt_bind_param($statement, 'sssd', $name, $phone, $itemsJson, $total);
+$statement = mysqli_prepare($conn, 'INSERT INTO offline_orders (customer_name, phone, table_number, items, total) VALUES (?, ?, ?, ?, ?)');
+mysqli_stmt_bind_param($statement, 'ssssd', $name, $phone, $tableNumber, $itemsJson, $total);
 
 if (mysqli_stmt_execute($statement)) {
     $orderId = mysqli_insert_id($conn);
+    if ($orderSource === 'table_qr' && $tableNumber !== '') {
+        header('Location: ../../public/table-order.html?offline_order=success&id=' . $orderId . '&table=' . rawurlencode($tableNumber));
+        exit;
+    }
     header('Location: ../Admin/offline_order.php?saved=' . $orderId);
     exit;
 } else {

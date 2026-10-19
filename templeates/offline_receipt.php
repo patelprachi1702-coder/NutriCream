@@ -4,7 +4,7 @@ include __DIR__ . '/../config/db.php';
 $orderId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 $order = null;
 if ($orderId) {
-    $statement = mysqli_prepare($conn, 'SELECT id, customer_name, items, total, created_at FROM offline_orders WHERE id = ?');
+    $statement = mysqli_prepare($conn, 'SELECT id, table_number, items, total, created_at FROM offline_orders WHERE id = ?');
     mysqli_stmt_bind_param($statement, 'i', $orderId);
     mysqli_stmt_execute($statement);
     $order = mysqli_fetch_assoc(mysqli_stmt_get_result($statement));
@@ -31,7 +31,9 @@ a { color: #ff4f89; }
 <p>This QR code is invalid or the order no longer exists.</p>
 <?php else: ?>
 <h1>Order #<?php echo (int) $order['id']; ?></h1>
-<p>Customer: <?php echo htmlspecialchars($order['customer_name']); ?></p>
+<?php if (!empty($order['table_number'])): ?>
+<p>Table: <?php echo htmlspecialchars($order['table_number']); ?></p>
+<?php endif; ?>
 <ul>
 <?php foreach (json_decode($order['items'], true) ?: [] as $item): ?>
 <li><?php echo htmlspecialchars($item['name'] ?? 'Item'); ?> x <?php echo (int) ($item['quantity'] ?? 0); ?> - ₹<?php echo number_format((float) ($item['price'] ?? 0) * (int) ($item['quantity'] ?? 0), 2); ?></li>

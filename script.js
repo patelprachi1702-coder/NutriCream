@@ -1,4 +1,6 @@
 // Ice cream menu data
+const appRootUrl = new URL('.', document.currentScript.src);
+
 const menuData = [
     {
         id: 1,
@@ -187,6 +189,7 @@ const menuData = [
 // Shopping cart
 let cart = [];
 let currentFilter = 'all';
+const cartStorageKey = document.getElementById('table-order-form') ? 'tableOrderCart' : 'cart';
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', () => {
@@ -198,45 +201,61 @@ document.addEventListener('DOMContentLoaded', () => {
     setupCheckoutButton();
     setupOrderTracking();
     showOrderSuccessMessage();
-    setupTableOrder();
-    document.getElementById('order-details-form')?.addEventListener('submit', function(e) {
+    const orderForm = document.getElementById('order-details-form');
+    orderForm?.addEventListener('submit', async function(e) {
+        if (orderForm.dataset.locationReady === 'true') {
+            delete orderForm.dataset.locationReady;
+            return;
+        }
+
+        e.preventDefault();
         if (cart.length === 0) {
-            e.preventDefault();
             alert('Please add an item to your cart before placing the order.');
             return;
         }
-        const totalAmount = document.getElementById('total').textContent.replace('₹', '').trim();
-        document.getElementById('total-input').value = totalAmount;
-        document.getElementById('cart-items-input').value = JSON.stringify(cart.map(item => ({
-            id: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-            customization: item.customization || ''
-        })));
+
+        const updateOrderData = () => {
+            const totalAmount = document.getElementById('total').textContent.replace('₹', '').trim();
+            document.getElementById('total-input').value = totalAmount;
+            document.getElementById('cart-items-input').value = JSON.stringify(cart.map(item => ({
+                id: item.id,
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                customization: item.customization || ''
+            })));
+        };
+        if (orderForm.dataset.locationPending === 'true') return;
+        orderForm.dataset.locationPending = 'true';
+        const locationStatus = document.getElementById('order-location-status');
+        document.getElementById('customer-latitude').value = '';
+        document.getElementById('customer-longitude').value = '';
+        if (navigator.geolocation) {
+            locationStatus.textContent = 'Checking your location. Your delivery address will be used if location is unavailable...';
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: 15000
+                    });
+                });
+                document.getElementById('customer-latitude').value = position.coords.latitude;
+                document.getElementById('customer-longitude').value = position.coords.longitude;
+                locationStatus.textContent = 'Location found. Placing your order...';
+            } catch {
+                locationStatus.textContent = 'Using the delivery address you provided.';
+            }
+        } else {
+            locationStatus.textContent = 'Using the delivery address you provided.';
+        }
+
+        updateOrderData();
+        orderForm.dataset.locationPending = 'false';
+        orderForm.dataset.locationReady = 'true';
+        orderForm.requestSubmit(e.submitter);
     });
 });
-
-function setupTableOrder() {
-    const table = new URLSearchParams(window.location.search).get('table');
-    const notice = document.getElementById('table-order-notice');
-    const address = document.getElementById('delivery-address');
-    const addressLabel = document.getElementById('address-label');
-    const partner = document.getElementById('delivery-partner');
-    const tableInput = document.getElementById('table-number-input');
-    if (!table || !notice || !address || !partner || !tableInput) return;
-
-    tableInput.value = table;
-    notice.textContent = `Table ${table}: add your items and place your order.`;
-    notice.hidden = false;
-    address.required = false;
-    address.hidden = true;
-    addressLabel.hidden = true;
-    partner.required = false;
-    partner.hidden = true;
-    window.history.replaceState({}, document.title, window.location.pathname + '?table=' + encodeURIComponent(table));
-    document.getElementById('order-form')?.scrollIntoView({ behavior: 'smooth' });
-}
 
 function showOrderSuccessMessage() {
     const params = new URLSearchParams(window.location.search);
@@ -263,21 +282,23 @@ function setupOrderTracking() {
     if (!trackingForm || !result) return;
     let refreshTimer;
     let trackingMap;
-    let trackingMarker;
+    let trackingMarkers = {};
     let trackedOrderId;
 
     async function loadOrder(orderId, refreshing = false) {
         if (!refreshing || orderId !== trackedOrderId) result.textContent = 'Checking order...';
 
         try {
-            const response = await fetch(`../server/core/track_order.php?id=${encodeURIComponent(orderId)}`);
+            const trackUrl = new URL('server/core/track_order.php', appRootUrl);
+            trackUrl.searchParams.set('id', orderId);
+            const response = await fetch(trackUrl);
             const order = await response.json();
             if (!response.ok) throw new Error(order.error || 'Order not found.');
 
             if (orderId !== trackedOrderId) {
                 trackedOrderId = orderId;
                 trackingMap = undefined;
-                trackingMarker = undefined;
+                trackingMarkers = {};
                 result.innerHTML = `
                     <h3>Order #${order.id}</h3>
                     <p><strong>Status:</strong> <span id="tracked-status"></span></p>
@@ -285,8 +306,8 @@ function setupOrderTracking() {
                     <p><strong>Total:</strong> ₹<span id="tracked-total"></span></p>
                     <p><strong>Placed:</strong> <span id="tracked-created"></span></p>
                     <div id="live-location-message" class="live-location-message"></div>
-                    <div id="order-map" class="order-map" aria-label="Live delivery location map"></div>
-                    <a id="order-google-map-link" class="map-btn" target="_blank" rel="noopener noreferrer" hidden>Open live location in Google Maps</a>
+                    <div id="order-map" class="order-map" aria-label="Map showing your location, the shop, and live delivery location"></div>
+                    <a id="order-google-map-link" class="map-btn" target="_blank" rel="noopener noreferrer" hidden>Open order location in Google Maps</a>
                 `;
             }
 
@@ -295,30 +316,77 @@ function setupOrderTracking() {
             document.getElementById('tracked-total').textContent = Number(order.total).toFixed(2);
             document.getElementById('tracked-created').textContent = order.created_at;
             const locationMessage = document.getElementById('live-location-message');
-            if (order.location_available && window.L) {
-                const location = [Number(order.latitude), Number(order.longitude)];
+            const mapLocations = [
+                {
+                    key: 'customer',
+                    available: order.customer_location_available,
+                    point: [Number(order.customer_latitude), Number(order.customer_longitude)],
+                    label: 'Your order location'
+                },
+                {
+                    key: 'shop',
+                    available: order.shop_location_available,
+                    point: [Number(order.shop_latitude), Number(order.shop_longitude)],
+                    label: 'Shop location'
+                },
+                {
+                    key: 'delivery',
+                    available: order.location_available,
+                    point: [Number(order.latitude), Number(order.longitude)],
+                    label: 'Live delivery location'
+                }
+            ].filter(location => location.available);
+            if (mapLocations.length && window.L) {
                 const googleMapLink = document.getElementById('order-google-map-link');
+                const primaryLocation = mapLocations.find(location => location.key === 'delivery')
+                    || mapLocations.find(location => location.key === 'customer')
+                    || mapLocations[0];
                 if (googleMapLink) {
-                    googleMapLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${order.latitude},${order.longitude}`)}`;
+                    googleMapLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(primaryLocation.point.join(','))}`;
                     googleMapLink.hidden = false;
                 }
                 if (!trackingMap) {
-                    trackingMap = L.map('order-map').setView(location, 16);
+                    trackingMap = L.map('order-map');
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         attribution: '&copy; OpenStreetMap contributors'
                     }).addTo(trackingMap);
-                    trackingMarker = L.marker(location).addTo(trackingMap).bindPopup('Delivery location');
-                } else {
-                    trackingMarker.setLatLng(location);
-                    trackingMap.panTo(location);
                 }
-                locationMessage.textContent = order.location_updated_at
-                    ? `Live delivery location. Updated ${order.location_updated_at}.`
-                    : 'Live delivery location';
+                mapLocations.forEach(location => {
+                    if (!trackingMarkers[location.key]) {
+                        trackingMarkers[location.key] = L.marker(location.point)
+                            .addTo(trackingMap)
+                            .bindPopup(location.label);
+                    } else {
+                        trackingMarkers[location.key].setLatLng(location.point);
+                    }
+                });
+                Object.keys(trackingMarkers).forEach(key => {
+                    if (!mapLocations.some(location => location.key === key)) {
+                        trackingMap.removeLayer(trackingMarkers[key]);
+                        delete trackingMarkers[key];
+                    }
+                });
+                const points = mapLocations.map(location => location.point);
+                if (points.length > 1) {
+                    trackingMap.fitBounds(L.latLngBounds(points), { padding: [24, 24], maxZoom: 16 });
+                } else {
+                    trackingMap.setView(points[0], 16);
+                }
+                const messages = [];
+                if (order.customer_location_available) messages.push('Your order location');
+                if (order.shop_location_available) messages.push('shop location');
+                if (order.location_available) {
+                    messages.push(order.location_updated_at
+                        ? `live delivery location updated ${order.location_updated_at}`
+                        : 'live delivery location');
+                } else {
+                    messages.push('live delivery location will appear when staff starts sharing it');
+                }
+                locationMessage.textContent = `${messages.join(' · ')}.`;
             } else {
                 const googleMapLink = document.getElementById('order-google-map-link');
                 if (googleMapLink) googleMapLink.hidden = true;
-                locationMessage.textContent = 'Live location will appear when the staff device starts sharing it.';
+                locationMessage.textContent = 'Location map is not available right now.';
             }
             clearInterval(refreshTimer);
             refreshTimer = setInterval(() => loadOrder(orderId, true), 5000);
@@ -333,6 +401,12 @@ function setupOrderTracking() {
         trackedOrderId = undefined;
         loadOrder(document.getElementById('tracking-order-id').value);
     });
+
+    const requestedOrderId = new URLSearchParams(window.location.search).get('track_order');
+    if (requestedOrderId && /^[1-9]\d*$/.test(requestedOrderId)) {
+        document.getElementById('tracking-order-id').value = requestedOrderId;
+        trackingForm.requestSubmit();
+    }
 }
 
 // Render menu items
@@ -648,19 +722,19 @@ function updateCartSummary() {
 
 // Save cart to localStorage
 function saveCart() {
-    localStorage.setItem('cart', JSON.stringify(cart));
+    localStorage.setItem(cartStorageKey, JSON.stringify(cart));
 }
 
 // Load cart from localStorage
 function loadCart() {
-    const savedCart = localStorage.getItem('cart');
+    const savedCart = localStorage.getItem(cartStorageKey);
     if (savedCart) {
         try {
             const parsedCart = JSON.parse(savedCart);
             cart = Array.isArray(parsedCart) ? parsedCart : [];
         } catch {
             cart = [];
-            localStorage.removeItem('cart');
+            localStorage.removeItem(cartStorageKey);
         }
         updateCartUI();
     }

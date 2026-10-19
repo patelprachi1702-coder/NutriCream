@@ -10,8 +10,8 @@ $offlineResult = mysqli_query($conn, "SELECT COUNT(*) AS total FROM offline_orde
 $offlineOrders = mysqli_fetch_assoc($offlineResult)['total'];
 
 /* Total Products */
-$productResult = mysqli_query($conn, "SELECT COUNT(*) AS total FROM products");
-$totalProducts = mysqli_fetch_assoc($productResult)['total'];
+require_once __DIR__ . '/product_summary.php';
+$totalProducts = count(getOrderedProductSummary($conn));
 
 /* Total Customers */
 $customerResult = mysqli_query($conn, "SELECT COUNT(DISTINCT phone) AS total FROM online_orders");
@@ -28,10 +28,10 @@ $offlineSales = mysqli_fetch_assoc($offlineSalesResult)['total'];
 $totalSales = $onlineSales + $offlineSales;
 
 
-/* Latest Online Orders */
+/* All Online Orders */
 $orders = mysqli_query(
     $conn,
-    "SELECT * FROM online_orders ORDER BY id DESC LIMIT 5"
+    "SELECT * FROM online_orders ORDER BY id DESC"
 );
 
 
@@ -304,7 +304,7 @@ tr:hover {
 </div>
 
 
-<div class="card">
+<a href="product.php" class="card" style="text-decoration: none; color: inherit;">
 
 <h3>🍦 Products</h3>
 
@@ -312,7 +312,7 @@ tr:hover {
 <?php echo $totalProducts; ?>
 </div>
 
-</div>
+</a>
 
 
 <div class="card">
@@ -343,7 +343,7 @@ tr:hover {
 
 <div class="table-box">
 
-<h2>📦 Recent Online Orders</h2>
+<h2>📦 Online Orders</h2>
 
 <table>
 
@@ -353,6 +353,10 @@ tr:hover {
 <th>Customer</th>
 <th>Phone</th>
 <th>Address</th>
+<th>Customer Location</th>
+<th>Track Map</th>
+<th>Delivery Partner</th>
+<th>Items</th>
 <th>Total</th>
 <th>Status</th>
 
@@ -379,7 +383,46 @@ while($row = mysqli_fetch_assoc($orders)) {
 </td>
 
 <td>
-<?php echo htmlspecialchars($row['address']); ?>
+<?php
+$deliveryAddress = trim($row['address'] ?? '');
+if ($deliveryAddress !== ''):
+    $addressMapUrl = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($deliveryAddress);
+?>
+<a href="<?php echo htmlspecialchars($addressMapUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?php echo htmlspecialchars($deliveryAddress); ?></a>
+<?php else: ?>
+Address not provided
+<?php endif; ?>
+</td>
+
+<td>
+<?php if ($row['customer_latitude'] !== null && $row['customer_longitude'] !== null): ?>
+<?php
+$customerLatitude = (float) $row['customer_latitude'];
+$customerLongitude = (float) $row['customer_longitude'];
+$customerMapUrl = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($customerLatitude . ',' . $customerLongitude);
+?>
+<a href="<?php echo htmlspecialchars($customerMapUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">View customer location</a>
+<?php else: ?>
+Location not available
+<?php endif; ?>
+</td>
+
+<td>
+<a href="../../public/index.html?track_order=<?php echo (int) $row['id']; ?>#track-order">Track order #<?php echo (int) $row['id']; ?></a>
+</td>
+
+<td>
+<?php echo htmlspecialchars($row['delivery_partner']); ?>
+</td>
+
+<td>
+<?php foreach (json_decode($row['items'], true) ?: [] as $item): ?>
+<?php echo htmlspecialchars($item['name'] ?? 'Item'); ?> x <?php echo (int) ($item['quantity'] ?? 0); ?>
+<?php if (!empty($item['customization'])): ?>
+<br><small>Customize: <?php echo htmlspecialchars($item['customization']); ?></small>
+<?php endif; ?>
+<br>
+<?php endforeach; ?>
 </td>
 
 <td>
@@ -404,7 +447,7 @@ while($row = mysqli_fetch_assoc($orders)) {
 
 <tr>
 
-<td colspan="6">
+<td colspan="10">
 No online orders found.
 </td>
 
@@ -428,10 +471,8 @@ No online orders found.
 <tr>
 
 <th>ID</th>
-<th>Customer</th>
-<th>Phone</th>
-<th>Ice Cream</th>
-<th>Quantity</th>
+<th>Table</th>
+<th>Items</th>
 <th>Total</th>
 
 </tr>
@@ -451,19 +492,13 @@ while($row = mysqli_fetch_assoc($offline)) {
 </td>
 
 <td>
-<?php echo htmlspecialchars($row['customer_name']); ?>
+<?php echo htmlspecialchars($row['table_number'] ?: '-'); ?>
 </td>
 
 <td>
-<?php echo htmlspecialchars($row['phone']); ?>
-</td>
-
-<td>
-<?php echo htmlspecialchars($row['icecream_name']); ?>
-</td>
-
-<td>
-<?php echo $row['quantity']; ?>
+<?php foreach (json_decode($row['items'], true) ?: [] as $item): ?>
+<?php echo htmlspecialchars($item['name'] ?? 'Item'); ?> x <?php echo (int) ($item['quantity'] ?? 0); ?><br>
+<?php endforeach; ?>
 </td>
 
 <td>
@@ -482,7 +517,7 @@ while($row = mysqli_fetch_assoc($offline)) {
 
 <tr>
 
-<td colspan="6">
+<td colspan="4">
 No offline orders found.
 </td>
 

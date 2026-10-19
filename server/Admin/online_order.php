@@ -25,6 +25,7 @@ $orders = mysqli_query($conn, 'SELECT * FROM online_orders ORDER BY id DESC');
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Online Orders</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 body { font-family: Arial, sans-serif; background: #f5f6fa; margin: 0; padding: 30px; }
 .orders-box { max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 12px; overflow-x: auto; }
@@ -34,6 +35,10 @@ table { width: 100%; border-collapse: collapse; margin-top: 20px; }
 th { background: #ff6b9d; color: white; text-align: left; }
 th, td { padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; }
 ul { margin: 0; padding-left: 18px; }
+.customer-map { margin-top: 8px; }
+.customer-map summary { cursor: pointer; color: #ff4f89; }
+.customer-map-canvas { width: 280px; height: 200px; margin-top: 8px; }
+.customer-map-link { display: inline-block; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -41,7 +46,7 @@ ul { margin: 0; padding-left: 18px; }
 <h1>Online Orders</h1>
 <p><a href="dashboard.php">Back to dashboard</a></p>
 <table>
-<thead><tr><th>ID</th><th>Customer</th><th>Phone</th><th>Table</th><th>Address</th><th>Delivery Partner</th><th>Items</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
+<thead><tr><th>ID</th><th>Customer</th><th>Phone</th><th>Table</th><th>Address</th><th>Customer Location</th><th>Track Map</th><th>Delivery Partner</th><th>Items</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
 <tbody>
 <?php if ($orders && mysqli_num_rows($orders) > 0): ?>
 <?php while ($order = mysqli_fetch_assoc($orders)): ?>
@@ -50,7 +55,34 @@ ul { margin: 0; padding-left: 18px; }
 <td><?php echo htmlspecialchars($order['customer_name']); ?></td>
 <td><?php echo htmlspecialchars($order['phone']); ?></td>
 <td><?php echo htmlspecialchars($order['table_number'] ?? '-'); ?></td>
-<td><?php echo htmlspecialchars($order['address']); ?></td>
+<td>
+<?php
+$deliveryAddress = trim($order['address'] ?? '');
+if ($deliveryAddress !== ''):
+	$addressMapUrl = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($deliveryAddress);
+?>
+<a href="<?php echo htmlspecialchars($addressMapUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?php echo htmlspecialchars($deliveryAddress); ?></a>
+<?php else: ?>
+Address not provided
+<?php endif; ?>
+</td>
+<td>
+<?php if ($order['customer_latitude'] !== null && $order['customer_longitude'] !== null): ?>
+<?php
+$customerLatitude = (float) $order['customer_latitude'];
+$customerLongitude = (float) $order['customer_longitude'];
+$customerMapUrl = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($customerLatitude . ',' . $customerLongitude);
+?>
+<details class="customer-map" data-latitude="<?php echo htmlspecialchars((string) $customerLatitude, ENT_QUOTES, 'UTF-8'); ?>" data-longitude="<?php echo htmlspecialchars((string) $customerLongitude, ENT_QUOTES, 'UTF-8'); ?>">
+<summary>Show customer location</summary>
+<div class="customer-map-canvas" aria-label="Map showing the customer's location"></div>
+<a class="customer-map-link" href="<?php echo htmlspecialchars($customerMapUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+</details>
+<?php else: ?>
+Location not available
+<?php endif; ?>
+</td>
+<td><a href="../../public/index.html?track_order=<?php echo (int) $order['id']; ?>#track-order">Track order #<?php echo (int) $order['id']; ?></a></td>
 <td><?php echo htmlspecialchars($order['delivery_partner']); ?></td>
 <td><ul><?php foreach (json_decode($order['items'], true) ?: [] as $item): ?>
 <li>
@@ -76,11 +108,34 @@ ul { margin: 0; padding-left: 18px; }
 <td><?php echo htmlspecialchars($order['created_at'] ?? ''); ?></td>
 </tr>
 <?php endwhile; ?>
-<?php else: ?><tr><td colspan="10">No online orders found.</td></tr><?php endif; ?>
+<?php else: ?><tr><td colspan="12">No online orders found.</td></tr><?php endif; ?>
 </tbody>
 </table>
 </main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+document.querySelectorAll('.customer-map').forEach(locationDetails => {
+	locationDetails.addEventListener('toggle', () => {
+		if (!locationDetails.open || locationDetails.dataset.mapInitialized === 'true') return;
+		if (!window.L) {
+			locationDetails.querySelector('.customer-map-canvas').textContent = 'Map could not be loaded.';
+			return;
+		}
+
+		const point = [
+			Number(locationDetails.dataset.latitude),
+			Number(locationDetails.dataset.longitude)
+		];
+		const map = L.map(locationDetails.querySelector('.customer-map-canvas')).setView(point, 16);
+		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+			attribution: '&copy; OpenStreetMap contributors'
+		}).addTo(map);
+		L.marker(point).addTo(map).bindPopup('Customer location').openPopup();
+		locationDetails.dataset.mapInitialized = 'true';
+		requestAnimationFrame(() => map.invalidateSize());
+	});
+});
+
 const locationWatchers = new Map();
 
 document.querySelectorAll('.share-location').forEach(button => {

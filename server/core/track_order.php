@@ -10,7 +10,7 @@ if (!$orderId || $orderId < 1) {
     exit;
 }
 
-$statement = mysqli_prepare($conn, 'SELECT id, customer_name, total, created_at, order_status, latitude, longitude, location_updated_at FROM online_orders WHERE id = ?');
+$statement = mysqli_prepare($conn, 'SELECT id, customer_name, total, created_at, order_status, latitude, longitude, location_updated_at, customer_latitude, customer_longitude FROM online_orders WHERE id = ?');
 mysqli_stmt_bind_param($statement, 'i', $orderId);
 mysqli_stmt_execute($statement);
 $result = mysqli_stmt_get_result($statement);
@@ -25,5 +25,11 @@ if (!$order) {
 $order['status'] = $order['order_status'];
 unset($order['order_status']);
 $order['location_available'] = $order['latitude'] !== null && $order['longitude'] !== null;
+$order['customer_location_available'] = $order['customer_latitude'] !== null && $order['customer_longitude'] !== null;
+$shopResult = mysqli_query($conn, 'SELECT latitude, longitude FROM shop_location WHERE id = 1');
+$shopLocation = $shopResult ? mysqli_fetch_assoc($shopResult) : null;
+$order['shop_latitude'] = $shopLocation ? (float) $shopLocation['latitude'] : 22.354374;
+$order['shop_longitude'] = $shopLocation ? (float) $shopLocation['longitude'] : 70.804119;
+$order['shop_location_available'] = true;
 echo json_encode($order);
 ?>

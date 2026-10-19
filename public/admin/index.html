@@ -52,15 +52,6 @@
       </button>
     </div>
   </section>
-  <div class="offer-container">
-    <div class="offer-card">
-      <div class="offer-badge">🔥 LIMITED OFFER</div>
-      <h2>🍦 Buy 2 Get 1 FREE</h2>
-      <p>🎉Buy 2 Get 1 Free Every Sunday🎉</p>
-      <button class="offer-btn">Claim Offer</button>
-    </div>
-  </div>
-
   <!-- Menu Section -->
   <section id="menu" class="menu">
     <div class="container">
@@ -128,7 +119,10 @@
             <input type="tel" name="phone" placeholder="Mobile Number" required><br>
             <input type="hidden" name="table_number" id="table-number-input">
           <label for="delivery-address" id="address-label">Delivery Address <span aria-hidden="true">*</span></label>
-          <textarea id="delivery-address" name="address" placeholder="Enter your complete delivery address" maxlength="100" required></textarea><br>
+          <textarea id="delivery-address" name="address" placeholder="Enter your complete delivery address" maxlength="255" required></textarea><br>
+          <input type="hidden" name="customer_latitude" id="customer-latitude">
+          <input type="hidden" name="customer_longitude" id="customer-longitude">
+          <p id="order-location-status" class="order-location-status" aria-live="polite">Enter your delivery address. Device location is optional.</p>
           <br>
 
             <select name="delivery_partner" id="delivery-partner" required>

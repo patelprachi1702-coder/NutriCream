@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order at Your Table - Creamy Dreams</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <style>
+    body.table-number-required #menu,
+    body.table-number-required #cart,
+    body.table-number-required #order-form {
+      display: none;
+    }
+    .table-number-form {
+      max-width: 360px;
+      margin: 16px auto 0;
+      display: flex;
+      gap: 8px;
+    }
+    .table-number-form input {
+      min-width: 0;
+      flex: 1;
+      padding: 11px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+    .table-number-form button {
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body class="table-number-required">
+  <nav class="navbar">
+    <div class="container">
+      <div class="logo">🍦 Coolest Dreams</div>
+      <ul class="nav-links">
+        <li><a href="#menu">Menu</a></li>
+        <li><a href="#cart">Cart (<span id="cart-count">0</span>)</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Order at Your Table</h1>
+      <p id="table-order-notice">Enter your table number to start your order.</p>
+      <form id="table-number-form" class="table-number-form"><br>
+        <input type="text" id="table-number-entry" maxlength="20" pattern="[A-Za-z0-9-]{1,20}" placeholder="Enter table number" aria-label="Table number" autocomplete="off" required>
+        <button class="btn btn-primary" type="submit">Continue</button>
+      </form><br>
+      <button class="btn btn-primary" onclick="document.getElementById('menu').scrollIntoView({behavior: 'smooth'})">
+        Explore Menu
+      </button>
+    </div>
+  </section>
+
+  <section id="menu" class="menu">
+    <div class="container">
+      <h2>Our Delicious Menu</h2>
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="vanilla">Vanilla</button>
+        <button class="filter-btn" data-filter="chocolate">Chocolate</button>
+        <button class="filter-btn" data-filter="fruity">Fruity</button>
+        <button class="filter-btn" data-filter="sugarfree">Sugar Free</button>
+        <button class="filter-btn" data-filter="customize">Customize Ice Cream</button>
+      </div>
+      <div class="menu-grid" id="menu-grid"></div>
+    </div>
+  </section>
+
+  <section id="cart" class="cart-section">
+    <div class="container">
+      <h2>Your Table Order</h2>
+      <div class="cart-content">
+        <div class="cart-items" id="cart-items">
+          <p class="empty-cart">Your cart is empty</p>
+        </div>
+        <div class="cart-summary">
+          <h3>Order Summary</h3>
+          <div class="summary-item">
+            <span>Subtotal:</span>
+            <span id="subtotal">₹0.00</span>
+          </div>
+          <div class="summary-item">
+            <span>Tax (10%):</span>
+            <span id="tax">₹0.00</span>
+          </div>
+          <div class="summary-item nutrition-total">
+            <span>Total Calories:</span>
+            <span id="total-calories">0 kcal</span>
+          </div>
+          <div class="summary-item nutrition-total">
+            <span>Total Sugar:</span>
+            <span id="total-sugar">0 g</span>
+          </div>
+          <div class="summary-item total">
+            <span>Total:</span>
+            <span id="total">₹0.00</span>
+          </div>
+          <button class="btn btn-primary btn-checkout" id="checkout-btn" disabled>
+            Place Table Order
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="order-section" id="order-form">
+    <div class="container">
+      <h2>Send Your Order</h2>
+      <p id="table-order-message" class="order-location-status" aria-live="polite"></p>
+      <form id="table-order-form" class="order-form" action="../server/core/save_offline_order.php" method="post">
+        <input type="hidden" name="table_number" id="table-number-input">
+        <input type="hidden" name="order_source" value="table_qr">
+        <input type="hidden" name="items" id="offline-items" value="[]">
+        <input type="hidden" name="total" id="offline-total-input" value="0">
+        <button type="submit" class="btn btn-primary">Send Order to Shop</button>
+      </form>
+    </div>
+  </section>
+
+  <script src="../script.js"></script>
+  <script src="assets/js/table-order.js"></script>
+</body>
+</html>

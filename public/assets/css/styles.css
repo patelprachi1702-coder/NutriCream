@@ -907,6 +907,12 @@ body {
   margin-top: 14px;
 }
 
+.order-location-status {
+  margin-top: 8px;
+  color: #555;
+  font-weight: 600;
+}
+
 @media (max-width: 600px) {
   .tracking-form {
     display: grid;
